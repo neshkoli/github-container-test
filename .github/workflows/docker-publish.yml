@@ -1,4 +1,4 @@
-name: Docker Publish
+name: Docker and NPM Publish
 
 on:
   push:
@@ -10,9 +10,8 @@ permissions:
   packages: write
 
 jobs:
-  build:
+  build-and-publish:
     runs-on: ubuntu-latest
-
     steps:
       - name: Checkout code
         uses: actions/checkout@v2
@@ -31,3 +30,33 @@ jobs:
       - name: Push Docker image
         run: |
           docker push ghcr.io/${{ github.repository_owner }}/hello-world:latest
+
+  publish-npm-package:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v2
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v2
+        with:
+          node-version: '14'
+          registry-url: 'https://npm.pkg.github.com'
+          scope: '@${{ github.repository_owner }}'
+
+      - name: Update package.json for GitHub Packages
+        run: |
+          # Add publishConfig and repository fields to package.json
+          jq '.publishConfig = {"registry": "https://npm.pkg.github.com"} | 
+              .repository = {"type": "git", "url": "git+https://github.com/${{ github.repository }}.git"} | 
+              .name = "@${{ github.repository_owner }}/hello-world-npm"' package.json > temp.json
+          mv temp.json package.json
+          cat package.json
+
+      - name: Install dependencies
+        run: npm ci || npm install
+        
+      - name: Publish to GitHub Packages
+        run: npm publish
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
